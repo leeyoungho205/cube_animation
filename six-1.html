@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>정육면체 전개도 애니메이션</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            /* 추가: 터치 액션으로 인한 페이지 스크롤 방지 (모바일 환경 개선) */
+            touch-action: none;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 1000px;
+        }
+
+        #cube-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            transform-style: preserve-3d;
+            cursor: pointer;
+            transition: transform 0.5s ease;
+            transform: rotateX(-20deg) rotateY(-30deg); /* 초기 회전 각도 */
+        }
+
+        .face {
+            position: absolute;
+            width: 200px;
+            height: 200px;
+            border: 1px solid #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            font-weight: bold;
+            backface-visibility: visible;
+            transition: transform 1.5s ease-in-out;
+        }
+
+        /* 면들의 초기 색상 및 위치 설정 */
+        #front {
+            background-color: rgba(255, 0, 0, 0.8);
+            transform: translateZ(100px);
+        }
+
+        #back {
+            background-color: rgba(0, 255, 0, 0.8);
+            transform: translateZ(-100px) rotateY(180deg);
+        }
+
+        #top {
+            background-color: rgba(0, 0, 255, 0.8);
+            transform: rotateX(90deg) translateZ(100px);
+        }
+
+        #bottom {
+            background-color: rgba(255, 255, 0, 0.8);
+            transform: rotateX(-90deg) translateZ(100px);
+        }
+
+        #left {
+            background-color: rgba(0, 255, 255, 0.8);
+            transform: rotateY(-90deg) translateZ(100px);
+        }
+
+        #right {
+            background-color: rgba(255, 0, 255, 0.8);
+            transform: rotateY(90deg) translateZ(100px);
+            transform-origin: bottom;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 10; /* 다른 요소 위에 표시 */
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+
+        button:hover {
+            background-color: #555;
+        }
+
+        .instructions {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 5px;
+            max-width: 300px;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div class="instructions">
+            <h3>정육면체 전개도 애니메이션</h3>
+            <p>큐브를 클릭하면 십자(+) 모양 전개도로 펼쳐집니다. 다시 클릭하면 원래대로 돌아갑니다.</p>
+            <p>마우스 드래그, 터치, 화살표 키로 큐브를 회전할 수 있습니다.</p>
+            <p>스페이스바: 펼치기/접기, R키: 리셋</p>
+            <p>회전 버튼으로도 90도씩 회전 가능합니다.</p>
+        </div>
+
+        <div id="cube-container">
+            <div id="front" class="face">앞</div>
+            <div id="back" class="face">뒤</div>
+            <div id="top" class="face">위</div>
+            <div id="bottom" class="face">아래</div>
+            <div id="left" class="face">왼쪽</div>
+            <div id="right" class="face">오른쪽</div>
+        </div>
+
+        <div class="controls">
+            <button id="rotate-x">X축 회전</button>
+            <button id="rotate-y">Y축 회전</button>
+            <button id="reset">원래대로</button>
+        </div>
+    </div>
+
+    <script>
+        // 요소 참조
+        const container = document.getElementById('container'); // 드래그 영역 고려
+        const cubeContainer = document.getElementById('cube-container');
+        const rotateXBtn = document.getElementById('rotate-x');
+        const rotateYBtn = document.getElementById('rotate-y');
+        const resetBtn = document.getElementById('reset');
+
+        // 면 요소 참조
+        const front = document.getElementById('front');
+        const back = document.getElementById('back');
+        const topFace = document.getElementById('top');
+        const bottom = document.getElementById('bottom');
+        const left = document.getElementById('left');
+        const right = document.getElementById('right');
+        const faces = [front, back, topFace, bottom, left, right]; // 면 배열
+
+        // 변수 초기화
+        let isUnfolded = false;
+        let rotationX = -20; // 초기 각도 약간 변경
+        let rotationY = -30; // 초기 각도 약간 변경
+        let autoRotate = true; // 자동 회전 활성화
+        let isAnimating = false; // 애니메이션 중복 방지 플래그
+
+        // 큐브 회전 상태 갱신 함수
+        function updateCubeRotation() {
+            cubeContainer.style.transform = `rotateX(${rotationX}deg) rotateY(${rotationY}deg)`;
+        }
+
+        // --- 전개도/접기 애니메이션 함수 ---
+
+        // 초기 transform 값 저장
+        const originalTransforms = {
+            front: 'translateZ(100px)',
+            back: 'translateZ(-100px) rotateY(180deg)',
+            top: 'rotateX(90deg) translateZ(100px)',
+            bottom: 'rotateX(-90deg) translateZ(100px)',
+            left: 'rotateY(-90deg) translateZ(100px)',
+            right: 'rotateY(90deg) translateZ(100px)'
+        };
+
+        /// 십자(+) 모양 전개도 transform 값
+        const unfoldedTransforms = {
+            // bottom이 중심축
+            bottom: 'rotateX(-90deg) translateZ(100px)',
+            
+            // front는 bottom과 만나는 모서리를 회전축으로 90도 회전
+            front: 'translateZ(100px) rotateX(-90deg)',
+            
+            // back은 bottom과 만나는 모서리를 회전축으로 90도 회전
+            back: 'rotateY(180deg) translateZ(100px) translateY(100px) rotateX(-90deg) translateY(-100px)',
+            
+            // top은 밑면과 같은 평면에서 right의 오른쪽에 위치
+            top: 'rotateX(-90deg) translateZ(100px) translateX(400px)',
+            
+            // left는 밑면과 만나는 실제 모서리를 회전축으로 사용
+            left: 'rotateY(-90deg) translateZ(100px) translateY(100px) rotateX(-90deg) translateY(-100px)',
+            
+            // right는 자신의 아래 변을 축으로 90도 회전
+            right: 'rotateY(90deg) translateZ(100px) rotateX(-90deg)'
+        };
+
+        // 면 요소들의 transform-origin 설정
+        front.style.transformOrigin = 'bottom';
+
+        // 전개도 애니메이션
+        function unfoldCubeSequentially() {
+            if (isUnfolded || isAnimating) return;
+            isAnimating = true;
+            autoRotate = false;
+
+            console.log("Unfolding...");
+
+            // 1단계: front를 아래로 펼침
+            setTimeout(() => {
+                front.style.transform = unfoldedTransforms.front;
+            }, 0);
+
+            // 2단계: back을 위로 펼침
+            setTimeout(() => {
+                back.style.transform = unfoldedTransforms.back;
+            }, 300);
+
+            // 3단계: left를 왼쪽으로 펼침
+            setTimeout(() => {
+                left.style.transform = unfoldedTransforms.left;
+            }, 600);
+
+            // 4단계: right를 오른쪽으로 펼침
+            setTimeout(() => {
+                right.style.transform = unfoldedTransforms.right;
+            }, 900);
+
+            // 5단계: top을 right 옆으로 펼침
+            setTimeout(() => {
+                topFace.style.transform = unfoldedTransforms.top;
+            }, 1200);
+
+            setTimeout(() => {
+                isUnfolded = true;
+                isAnimating = false;
+                console.log("Unfolded");
+            }, 3000);
+        }
+
+        // 큐브 접기 애니메이션
+        function foldCubeSequentially() {
+            if (!isUnfolded || isAnimating) return;
+            isAnimating = true;
+            autoRotate = false;
+
+            console.log("Folding...");
+
+            // 1단계: top을 접음
+            setTimeout(() => {
+                topFace.style.transform = originalTransforms.top;
+            }, 0);
+
+            // 2단계: right를 접음
+            setTimeout(() => {
+                right.style.transform = originalTransforms.right;
+            }, 300);
+
+            // 3단계: left를 접음
+            setTimeout(() => {
+                left.style.transform = originalTransforms.left;
+            }, 600);
+
+            // 4단계: back을 접음
+            setTimeout(() => {
+                back.style.transform = originalTransforms.back;
+            }, 900);
+
+            // 5단계: front를 접음
+            setTimeout(() => {
+                front.style.transform = originalTransforms.front;
+            }, 1200);
+
+            setTimeout(() => {
+                isUnfolded = false;
+                isAnimating = false;
+                console.log("Folded");
+            }, 3000);
+        }
+
+
+        // --- 이벤트 리스너 등록 ---
+
+        // 큐브 클릭: 펼치기/접기 토글
+        cubeContainer.addEventListener('click', () => {
+             if (isAnimating) return; // 애니메이션 중 클릭 무시
+            if (isUnfolded) {
+                foldCubeSequentially();
+            } else {
+                unfoldCubeSequentially();
+            }
+        });
+
+        // 회전 버튼
+        rotateXBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            autoRotate = false;
+            rotationX = (rotationX - 90); // 버튼 클릭 시 회전 방향 조정
+            updateCubeRotation();
+        });
+
+        rotateYBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            autoRotate = false;
+            rotationY = (rotationY + 90);
+            updateCubeRotation();
+        });
+
+        // 리셋 버튼
+        resetBtn.addEventListener('click', () => {
+            if (isAnimating) return;
+            autoRotate = false; // 리셋 시 자동 회전 중지
+            rotationX = -20; // 초기 각도로
+            rotationY = -30;
+            updateCubeRotation();
+
+            // 전개도가 펼쳐져 있다면 원래대로 접기
+            if (isUnfolded) {
+                foldCubeSequentially();
+            }
+        });
+
+        // --- 자동 회전 ---
+        function autoRotation() {
+            if (autoRotate && !isDragging && !isUnfolded && !isAnimating) { // 드래그 중, 펼쳐진 상태, 애니메이션 중 아닐 때만 자동 회전
+                rotationY += 0.2; // 회전 속도 약간 줄임
+                updateCubeRotation();
+            }
+             // requestAnimationFrame은 autoRotate 상태와 관계없이 계속 호출되어야 상태 변경 시 다시 시작 가능
+            requestAnimationFrame(autoRotation);
+        }
+
+        // 초기 자동 회전 시작
+        updateCubeRotation(); // 초기 각도 적용
+        requestAnimationFrame(autoRotation);
+
+
+        // --- 마우스 드래그로 큐브 회전 ---
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        // document 대신 container 사용 시 container 외부 드래그는 인식 못함
+        // 사용성 위해 document 사용 유지
+        document.addEventListener('mousedown', (e) => {
+             // 마우스 클릭 시작점이 큐브 또는 컨트롤 영역이 아닐 경우 드래그 시작 안 함 (선택적 개선)
+             // if (!cubeContainer.contains(e.target) && !e.target.closest('.controls')) return;
+
+            isDragging = true;
+            autoRotate = false; // 드래그 시작 시 자동 회전 중지
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+             // 드래그 중에는 transition 없애서 즉각 반응하도록 (선택적)
+             // cubeContainer.style.transition = 'none';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                 // 드래그 끝나면 transition 복원 (선택적)
+                 // cubeContainer.style.transition = 'transform 0.5s ease';
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging || isAnimating) return; // 드래그 중이 아니거나 애니메이션 중이면 무시
+
+            const dx = e.clientX - previousMousePosition.x;
+            const dy = e.clientY - previousMousePosition.y;
+
+            rotationY += dx * 0.5; // 회전 감도 조절
+            rotationX -= dy * 0.5; // Y축 움직임에 따른 X축 회전 (방향 주의)
+
+            updateCubeRotation();
+
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        // --- 키보드 컨트롤 추가 ---
+        document.addEventListener('keydown', (e) => {
+             if (isAnimating) return; // 애니메이션 중 키 입력 무시
+            autoRotate = false; // 키 입력 시 자동 회전 중지
+
+            switch(e.key) {
+                case 'ArrowUp':
+                    rotationX -= 10;
+                    break;
+                case 'ArrowDown':
+                    rotationX += 10;
+                    break;
+                case 'ArrowLeft':
+                    rotationY -= 10;
+                    break;
+                case 'ArrowRight':
+                    rotationY += 10;
+                    break;
+                case ' ':  // 스페이스바
+                    e.preventDefault(); // 스크롤 방지
+                    if (isUnfolded) {
+                        foldCubeSequentially();
+                    } else {
+                        unfoldCubeSequentially();
+                    }
+                    break;
+                case 'r':  // r 키로 리셋
+                case 'R':
+                    rotationX = -20;
+                    rotationY = -30;
+                    if (isUnfolded) {
+                        foldCubeSequentially();
+                    }
+                    break;
+                 default:
+                     return; // 다른 키는 무시
+            }
+            updateCubeRotation();
+        });
+
+        // --- 모바일 터치 지원 ---
+        let touchStartX, touchStartY;
+
+        document.addEventListener('touchstart', (e) => {
+             // 터치 시작점이 큐브 또는 컨트롤 영역이 아닐 경우 무시 (선택적)
+            // if (!cubeContainer.contains(e.targetTouches[0].target) && !e.targetTouches[0].target.closest('.controls')) return;
+
+             if (e.touches.length === 1) { // 싱글 터치만 처리
+                isDragging = true; // 터치도 드래그로 간주
+                autoRotate = false; // 터치 시작 시 자동 회전 중지
+                const touch = e.touches[0];
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+                previousMousePosition = { x: touchStartX, y: touchStartY }; // 마우스 로직과 호환되도록
+                 // cubeContainer.style.transition = 'none'; // 선택적
+            }
+        }, { passive: false }); // preventDefault를 위해 passive: false
+
+        document.addEventListener('touchend', (e) => {
+            if (isDragging) {
+                isDragging = false;
+                 // cubeContainer.style.transition = 'transform 0.5s ease'; // 선택적
+            }
+        });
+
+
+        document.addEventListener('touchmove', (e) => {
+             // 스크롤 방지 (body style의 touch-action: none도 도움됨)
+             e.preventDefault();
+
+            if (!isDragging || e.touches.length !== 1 || isAnimating) return; // 드래그 중이 아니거나 멀티터치거나 애니메이션 중이면 무시
+
+            const touch = e.touches[0];
+            const dx = touch.clientX - previousMousePosition.x;
+            const dy = touch.clientY - previousMousePosition.y;
+
+            rotationY += dx * 0.5;
+            rotationX -= dy * 0.5;
+
+            updateCubeRotation();
+
+            // previousMousePosition 업데이트
+            previousMousePosition = { x: touch.clientX, y: touch.clientY };
+
+        }, { passive: false }); // preventDefault를 위해 passive: false
+
+    </script>
+</body>
+</html>
