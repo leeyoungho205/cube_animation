@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>원의 넓이 계산 애니메이션</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 20px;
+      background-color: #f0f8ff;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .animation-container {
+      width: 600px;
+      height: 300px;
+      position: relative;
+      background-color: #e0f0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 15px;
+      margin: 0 5px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .explanation {
+      width: 80%;
+      text-align: left;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    #formula {
+      font-size: 24px;
+      margin: 20px 0;
+    }
+    .circle {
+      position: absolute;
+      border-radius: 50%;
+    }
+    .sector {
+      position: absolute;
+      transition: all 1.5s ease-in-out;
+    }
+    .rectangle-outline {
+      position: absolute;
+      border: 1px dashed #333;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+      text-align: center;
+    }
+    .label {
+      position: absolute;
+      font-size: 16px;
+      font-weight: bold;
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>원의 넓이 계산 애니메이션</h1>
+  
+  <div class="container">
+    <div class="animation-container" id="canvas">
+      <!-- 애니메이션이 여기에 그려집니다 -->
+    </div>
+    
+    <div class="controls">
+      <button id="step1">1단계: 원 그리기</button>
+      <button id="step2">2단계: 분할하기</button>
+      <button id="step3">3단계: 펼치기</button>
+      <button id="reset">처음으로</button>
+    </div>
+    
+    <div id="formula">
+      원의 넓이 = π × r²
+    </div>
+    
+    <div class="explanation">
+      <h3>원의 넓이 계산 원리</h3>
+      <p>원을 무수히 많은 부채꼴 조각으로 나누고 이를 펼치면, 밑변이 원주(2πr)의 절반(πr)이고 높이가 반지름(r)인 직사각형과 비슷한 모양이 됩니다.</p>
+      <p>이 직사각형의 넓이는 (밑변 × 높이) = (πr × r) = πr²이 됩니다.</p>
+      <p>이 애니메이션은 원을 작은 부채꼴로 분할하여 직사각형 형태로 재배열하는 과정을 보여줍니다. 분할된 조각 수가 많아질수록, 이 형태는 직사각형에 더 가까워집니다.</p>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const step1Button = document.getElementById('step1');
+    const step2Button = document.getElementById('step2');
+    const step3Button = document.getElementById('step3');
+    const resetButton = document.getElementById('reset');
+    
+    const radius = 80;
+    const centerX = 150;
+    const centerY = 150;
+    let sectors = [];
+    let animationState = 0;
+    
+    function reset() {
+      canvas.innerHTML = '';
+      sectors = [];
+      animationState = 0;
+    }
+    
+    function drawCircle() {
+      reset();
+      
+      // SVG 생성
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "300");
+      svg.setAttribute("height", "300");
+      svg.style.position = "absolute";
+      svg.style.left = "0";
+      svg.style.top = "0";
+      
+      // 원 그리기
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", centerX);
+      circle.setAttribute("cy", centerY);
+      circle.setAttribute("r", radius);
+      circle.setAttribute("fill", "#4CAF50");
+      circle.setAttribute("stroke", "#333");
+      circle.setAttribute("stroke-width", "2");
+      
+      svg.appendChild(circle);
+      
+      // 반지름 선 그리기
+      const radiusLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      radiusLine.setAttribute("x1", centerX);
+      radiusLine.setAttribute("y1", centerY);
+      radiusLine.setAttribute("x2", centerX + radius);
+      radiusLine.setAttribute("y2", centerY);
+      radiusLine.setAttribute("stroke", "#333");
+      radiusLine.setAttribute("stroke-width", "2");
+      
+      // 반지름 레이블
+      const radiusLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      radiusLabel.setAttribute("x", centerX + radius / 2);
+      radiusLabel.setAttribute("y", centerY - 10);
+      radiusLabel.setAttribute("text-anchor", "middle");
+      radiusLabel.textContent = "r";
+      radiusLabel.setAttribute("fill", "#000");
+      
+      svg.appendChild(radiusLine);
+      svg.appendChild(radiusLabel);
+      
+      canvas.appendChild(svg);
+      animationState = 1;
+    }
+    
+    function createSectors(numSectors = 32) {
+      reset();
+      
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "300");
+      svg.setAttribute("height", "300");
+      svg.style.position = "absolute";
+      svg.style.left = "0";
+      svg.style.top = "0";
+      
+      // 원 배경 그리기
+      const circleBackground = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circleBackground.setAttribute("cx", centerX);
+      circleBackground.setAttribute("cy", centerY);
+      circleBackground.setAttribute("r", radius);
+      circleBackground.setAttribute("fill", "#4CAF5030");
+      circleBackground.setAttribute("stroke", "#333");
+      circleBackground.setAttribute("stroke-width", "2");
+      
+      svg.appendChild(circleBackground);
+      
+      // 부채꼴 생성
+      for (let i = 0; i < numSectors; i++) {
+        const startAngle = (i / numSectors) * 2 * Math.PI;
+        const endAngle = ((i + 1) / numSectors) * 2 * Math.PI;
+        
+        // 부채꼴 경로 생성
+        const sector = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        
+        const x1 = centerX;
+        const y1 = centerY;
+        const x2 = centerX + radius * Math.cos(startAngle);
+        const y2 = centerY + radius * Math.sin(startAngle);
+        const x3 = centerX + radius * Math.cos(endAngle);
+        const y3 = centerY + radius * Math.sin(endAngle);
+        
+        const largeArcFlag = endAngle - startAngle <= Math.PI ? "0" : "1";
+        
+        const d = [
+          `M${x1},${y1}`, // 중심점
+          `L${x2},${y2}`, // 시작점
+          `A${radius},${radius} 0 ${largeArcFlag} 1 ${x3},${y3}`, // 호
+          `Z` // 닫기
+        ].join(' ');
+        
+        sector.setAttribute("d", d);
+        sector.setAttribute("fill", i % 2 === 0 ? "#4CAF50" : "#3F9142");
+        sector.setAttribute("stroke", "#333");
+        sector.setAttribute("stroke-width", "1");
+        
+        svg.appendChild(sector);
+      }
+      
+      // 중심에서 분할선 그리기
+      for (let i = 0; i < numSectors; i++) {
+        const angle = (i / numSectors) * 2 * Math.PI;
+        
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1", centerX);
+        line.setAttribute("y1", centerY);
+        line.setAttribute("x2", centerX + radius * Math.cos(angle));
+        line.setAttribute("y2", centerY + radius * Math.sin(angle));
+        line.setAttribute("stroke", "#333");
+        line.setAttribute("stroke-width", "1");
+        
+        svg.appendChild(line);
+      }
+      
+      canvas.appendChild(svg);
+      animationState = 2;
+    }
+    
+    function unfoldSectors() {
+      if (animationState !== 2) return;
+      
+      reset();
+      
+      const numSectors = 32; // 부채꼴의 개수
+      
+      // 직사각형 크기 계산
+      const rectWidth = Math.PI * radius; // 원주의 절반: πr
+      const rectHeight = radius; // 반지름: r
+      
+      // 직사각형 위치
+      const rectX = 300;
+      const rectY = centerY - rectHeight / 2;
+      
+      // 부채꼴 크기 계산
+      const sectorWidth = rectWidth / numSectors; // 각 부채꼴의 너비
+      
+      // 원래 원의 테두리 그리기
+      const circleSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      circleSvg.setAttribute("width", "300");
+      circleSvg.setAttribute("height", "300");
+      circleSvg.style.position = "absolute";
+      circleSvg.style.left = "0";
+      circleSvg.style.top = "0";
+      
+      const circleOutline = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circleOutline.setAttribute("cx", centerX);
+      circleOutline.setAttribute("cy", centerY);
+      circleOutline.setAttribute("r", radius);
+      circleOutline.setAttribute("fill", "none");
+      circleOutline.setAttribute("stroke", "#333");
+      circleOutline.setAttribute("stroke-width", "2");
+      circleOutline.setAttribute("stroke-dasharray", "5,5"); // 점선 스타일
+      
+      circleSvg.appendChild(circleOutline);
+      canvas.appendChild(circleSvg);
+      
+      // 직사각형 윤곽선 그리기
+      const rectangle = document.createElement("div");
+      rectangle.className = "rectangle-outline";
+      rectangle.style.width = `${rectWidth}px`;
+      rectangle.style.height = `${rectHeight}px`;
+      rectangle.style.left = `${rectX}px`;
+      rectangle.style.top = `${rectY}px`;
+      canvas.appendChild(rectangle);
+      
+      // 직사각형 레이블 추가
+      const widthLabel = document.createElement("div");
+      widthLabel.className = "label";
+      widthLabel.textContent = "πr";
+      widthLabel.style.left = `${rectX + rectWidth / 2 - 10}px`;
+      widthLabel.style.top = `${rectY + rectHeight + 20}px`;
+      canvas.appendChild(widthLabel);
+      
+      const heightLabel = document.createElement("div");
+      heightLabel.className = "label";
+      heightLabel.textContent = "r";
+      heightLabel.style.left = `${rectX - 25}px`;
+      heightLabel.style.top = `${rectY + rectHeight / 2 - 10}px`;
+      canvas.appendChild(heightLabel);
+      
+      // 부채꼴 생성 및 애니메이션 설정
+      for (let i = 0; i < numSectors; i++) {
+        const startAngle = (i / numSectors) * 2 * Math.PI;
+        const endAngle = ((i + 1) / numSectors) * 2 * Math.PI;
+        
+        // 부채꼴의 중심선 각도 계산 (라디안)
+        const midAngle = (startAngle + endAngle) / 2;
+        // 라디안에서 도(degree)로 변환
+        const midAngleDegrees = midAngle * (180 / Math.PI);
+        
+        // SVG로 부채꼴 생성
+        const sectorSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        sectorSvg.setAttribute("width", "300");
+        sectorSvg.setAttribute("height", "300");
+        sectorSvg.style.position = "absolute";
+        sectorSvg.style.left = "0";
+        sectorSvg.style.top = "0";
+        sectorSvg.className = "sector";
+        
+        const sectorPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        
+        // 부채꼴 경로 생성
+        const d = [
+          `M${centerX},${centerY}`, // 중심점
+          `L${centerX + radius * Math.cos(startAngle)},${centerY + radius * Math.sin(startAngle)}`, // 시작점
+          `A${radius},${radius} 0 0 1 ${centerX + radius * Math.cos(endAngle)},${centerY + radius * Math.sin(endAngle)}`, // 호
+          'Z' // 닫기
+        ].join(' ');
+        
+        sectorPath.setAttribute("d", d);
+        sectorPath.setAttribute("fill", i % 2 === 0 ? "#4CAF50" : "#3F9142");
+        sectorPath.setAttribute("stroke", "#333");
+        sectorPath.setAttribute("stroke-width", "1");
+        
+        sectorSvg.appendChild(sectorPath);
+        canvas.appendChild(sectorSvg);
+        
+        // 최종 위치 계산
+        const targetX = rectX + (i * sectorWidth);
+        const isEven = i % 2 === 0;
+        
+        // 애니메이션 적용
+        setTimeout(() => {
+          const translateX = targetX - centerX;
+          let translateY;
+          
+          if (isEven) {
+            // 짝수 번째: 위쪽 선분에 중심점 배치
+            translateY = rectY - centerY;
+            
+            // 중심선이 아래쪽을 향하도록 회전 (90도 - 부채꼴 중심선 각도)
+            const rotateAngle = 90 - midAngleDegrees;
+            
+            sectorSvg.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${rotateAngle}deg)`;
+          } else {
+            // 홀수 번째: 아래쪽 선분에 중심점 배치
+            translateY = (rectY + rectHeight) - centerY;
+            
+            // 중심선이 위쪽을 향하도록 회전 (270도 - 부채꼴 중심선 각도)
+            const rotateAngle = 270 - midAngleDegrees;
+            
+            sectorSvg.style.transform = `translate(${translateX}px, ${translateY}px) rotate(${rotateAngle}deg)`;
+          }
+        }, i * 50); // 애니메이션 속도 조정
+      }
+      
+      // 직사각형 윤곽선과 레이블 표시
+      setTimeout(() => {
+        rectangle.style.opacity = "1";
+        widthLabel.style.opacity = "1";
+        heightLabel.style.opacity = "1";
+      }, numSectors * 50 + 500); // 애니메이션 속도에 맞게 조정
+      
+      animationState = 3;
+    }
+    
+    step1Button.addEventListener('click', drawCircle);
+    step2Button.addEventListener('click', () => createSectors(32));
+    step3Button.addEventListener('click', unfoldSectors);
+    resetButton.addEventListener('click', reset);
+    
+    // 초기 상태: 원 그리기
+    drawCircle();
+  </script>
+</body>
+</html>
